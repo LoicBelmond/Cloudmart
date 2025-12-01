@@ -12,44 +12,39 @@ jobs:
     env:
       RG_NAME: Student-RG-1887764
       CONTAINER_NAME: cloudmart-app
-      LOCATION: canadacentral          # your region
-      DNS_LABEL: cloudmart-1887764     # must be globally unique; change if needed
+      LOCATION: canadacentral
+      DNS_LABEL: cloudmart1887764
 
     steps:
-      # 1. Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Login to Docker Hub
+      # ----- DOCKER BUILD + PUSH -----
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3. Build backend Docker image
       - name: Build Docker image
         run: |
           docker build \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/cloudmart-api:latest \
             -f applications/backend/Dockerfile .
 
-      # 4. Push Docker image
       - name: Push Docker image
-        run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/cloudmart-api:latest
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/cloudmart-api:latest
 
-      # 5. Login to Azure with the service principal JSON (from az ad sp create-for-rbac --sdk-auth)
+      # ----- AZURE LOGIN -----
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # (Optional) show CLI version – just for debugging
       - name: Check Azure CLI
         run: az --version
 
-      # 6. Deploy / update Azure Container Instance using host az CLI
+      # ----- DEPLOY FIXED -----
       - name: Deploy CloudMart API Container
         run: |
           set -e
@@ -60,15 +55,15 @@ jobs:
           DNS_LABEL="${{ env.DNS_LABEL }}"
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/cloudmart-api:latest"
 
-          echo "Deploying image: $IMAGE in resource group: $RG_NAME"
+          echo "Deploying image: $IMAGE"
 
-          # If container already exists, delete it so we always get a clean deployment
+          # Delete old container if exists
           if az container show --resource-group "$RG_NAME" --name "$CONTAINER_NAME" >/dev/null 2>&1; then
-            echo "Existing container found, deleting..."
+            echo "Deleting existing container..."
             az container delete --resource-group "$RG_NAME" --name "$CONTAINER_NAME" --yes
-          else
-            echo "No existing container, creating a new one..."
           fi
+
+          echo "Creating new Azure Container Instance..."
 
           az container create \
             --resource-group "$RG_NAME" \
@@ -77,10 +72,7 @@ jobs:
             --location "$LOCATION" \
             --dns-name-label "$DNS_LABEL" \
             --ports 80 \
-            --restart-policy Always \
-            --os-type Linux
-            # When Cosmos DB is ready you can add:
-            # --environment-variables \
-            #   COSMOS_ENDPOINT='${{ secrets.COSMOS_ENDPOINT }}' \
-            #   COSMOS_KEY='${{ secrets.COSMOS_KEY }}' \
-            #   COSMOS_DB_NAME='cloudmart'
+            --os-type Linux \
+            --cpu 1 \
+            --memory 1.5 \
+            --restart-policy Always
