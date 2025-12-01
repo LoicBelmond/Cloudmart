@@ -1,37 +1,27 @@
 # applications/backend/Dockerfile
-# Build context is the repository root.
-# Example local build:
-#   docker build -t cloudmart-api-local -f applications/backend/Dockerfile .
 
+# 1. Base image
 FROM python:3.11-slim
 
-# Avoid interactive prompts & keep image small
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
+# 2. Workdir inside the container
 WORKDIR /app
 
-# -------------------------------------------------------
-# Install Python dependencies
-# -------------------------------------------------------
+# 3. Install system deps (optional but useful for SSL, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+ && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first so Docker can cache this layer
-COPY applications/backend/requirements.txt .
+# 4. Copy requirements and install
+COPY applications/backend/requirements.txt ./requirements.txt
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# -------------------------------------------------------
-# Copy application code
-# -------------------------------------------------------
-
+# 5. Copy application code
 COPY applications/backend/app ./app
 
-# -------------------------------------------------------
-# Runtime configuration
-# -------------------------------------------------------
-
+# 6. Environment & port
 ENV PORT=80
 EXPOSE 80
 
-# Use uvicorn to run the FastAPI app
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
+# 7. Start FastAPI with Uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
