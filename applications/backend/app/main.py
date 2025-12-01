@@ -4,20 +4,17 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from .database import get_cosmos_client  # keep your existing imports
-from .models import Product            # and any others you had
+# keep your existing imports:
+# from .database import get_cosmos_client
+# from .models import Product, ...
 
 app = FastAPI()
 
-# =========================
-# Frontend paths + static
-# =========================
-# current file: /app/app/main.py
-# app root:      /app
-BASE_DIR = Path(__file__).resolve().parent.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
+# ========== Frontend paths ==========
+BASE_DIR = Path(__file__).resolve().parent.parent  # /app
+FRONTEND_DIR = BASE_DIR / "frontend"               # /app/frontend
 
-# Serve static files (CSS, JS, etc.) from /static
+# Serve static assets if you have any (CSS/JS)
 app.mount(
     "/static",
     StaticFiles(directory=FRONTEND_DIR),
@@ -26,30 +23,13 @@ app.mount(
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_home():
-    """
-    Return the frontend HTML page instead of JSON.
-    """
     index_file = FRONTEND_DIR / "index.html"
+    # If index.html is missing, return a simple message instead of crashing
+    if not index_file.exists():
+        return HTMLResponse("<h1>CloudMart</h1><p>index.html not found in /frontend</p>")
     return FileResponse(index_file)
 
 
-# =========================
-# Health check
-# =========================
 @app.get("/health")
 async def health():
     return {"status": "ok", "message": "CloudMart backend is running on Azure"}
-
-
-# =========================
-# Example API endpoints
-# (keep your existing ones, or use these)
-# =========================
-@app.get("/api/v1/products")
-async def list_products():
-    client = get_cosmos_client()
-    database = client.get_database_client("cloudmart")
-    container = database.get_container_client("products")
-
-    items = list(container.read_all_items())
-    return items
