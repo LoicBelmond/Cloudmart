@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CloudMart</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>CloudMart</h1>
+    <nav>
+      <button id="nav-home">Home</button>
+      <button id="nav-cart">Cart (<span id="cart-count">0</span>)</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- HOME / PRODUCTS -->
+    <section id="home-view">
+      <h2>Products</h2>
+      <div id="products" class="cards"></div>
+    </section>
+
+    <!-- CART -->
+    <section id="cart-view" class="hidden">
+      <h2>Your Cart</h2>
+      <div id="cart-items"></div>
+      <div id="cart-summary">
+        <span>Total: $<span id="cart-total">0.00</span></span>
+        <button id="checkout-btn">Checkout</button>
+      </div>
+      <p id="cart-message" class="message"></p>
+    </section>
+
+    <!-- ORDER CONFIRMATION -->
+    <section id="order-view" class="hidden">
+      <h2>Order Confirmation</h2>
+      <p id="order-message"></p>
+      <button id="back-home-btn">Back to Home</button>
+    </section>
+  </main>
+</body>
+</html>
