@@ -30,9 +30,8 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/cloudmart-api:latest
 
       # 4. Install Azure CLI (via pip — stable version that works)
-      - name: Install Azure CLI (stable pip version)
-        run: |
-          pip install azure-cli==2.55.0
+      - name: Install Azure CLI
+        uses: azure/cli@v2
 
       # 5. Login to Azure with Service Principal
       - name: Azure Login
