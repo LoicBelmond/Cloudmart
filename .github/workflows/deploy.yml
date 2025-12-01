@@ -1,0 +1,67 @@
+name: CD - Deploy CloudMart to Azure
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Get the code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Log in to Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 3. Build and push backend image
+      - name: Build and push backend image
+        run: |
+          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/cloudmart-api:latest
+          docker build -t $IMAGE_NAME -f applications/backend/Dockerfile .
+          docker push $IMAGE_NAME
+
+      # 4. Log in to Azure with the service principal
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 5. Create or update the Azure Container Instance
+      - name: Deploy container to Azure Container Instances
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            RG_NAME=Student-RG-1887764
+            CONTAINER_NAME=cloudmart-app
+            LOCATION=canadacentral
+            DNS_LABEL=cloudmart-1887764
+            IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/cloudmart-api:latest
+
+            # If container already exists, delete it first (so create won't fail)
+            if az container show --resource-group $RG_NAME --name $CONTAINER_NAME >/dev/null 2>&1; then
+              echo "Existing container found, deleting..."
+              az container delete --resource-group $RG_NAME --name $CONTAINER_NAME --yes
+            else
+              echo "No existing container, creating new one..."
+            fi
+
+            az container create \
+              --resource-group $RG_NAME \
+              --name $CONTAINER_NAME \
+              --image $IMAGE \
+              --location $LOCATION \
+              --dns-name-label $DNS_LABEL \
+              --ports 80 \
+              --restart-policy Always \
+              --environment-variables \
+                COSMOS_ENDPOINT=${{ secrets.COSMOS_ENDPOINT }} \
+                COSMOS_KEY=${{ secrets.COSMOS_KEY }} \
+                COSMOS_DB_NAME=cloudmart
