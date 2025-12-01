@@ -1,70 +1,93 @@
-name: CD - Build, Push, Deploy to ACI
+name: CD - Deploy CloudMart to Azure
 
 on:
   push:
     branches: [ main ]
-    paths:
-      - "applications/backend/**"
-      - "applications/backend/Dockerfile"
-      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}
 
 jobs:
   build-push-deploy:
     runs-on: ubuntu-latest
 
     env:
-      IMAGE_NAME: cloudmart-api
-      RESOURCE_GROUP: Student-RG-1887764
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/cloudmart-api:latest
+      RG_NAME: Student-RG-1887764
       CONTAINER_NAME: cloudmart-app
-      CONTAINER_REGION: canadaeast
+      LOCATION: canadacentral
+      DNS_LABEL: cloudmart-1887764
 
     steps:
-      - name: Checkout code
+      # 1. Code checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # 3. Build Docker image
       - name: Build Docker image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest \
-            -f applications/backend/Dockerfile .
+          docker build -t "$IMAGE_NAME" -f applications/backend/Dockerfile .
 
+      # 4. Push Docker image
       - name: Push Docker image
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          docker push "$IMAGE_NAME"
 
+      # 5. Install a safe Azure CLI version (fixes msal NormalizedResponse bug)
+      - name: Install Azure CLI 2.66.0
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates curl apt-transport-https lsb-release gnupg
+          curl -sL https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
+          sudo apt-get update
+          sudo apt-get install -y azure-cli=2.66.0-1~$(lsb_release -cs)
+          az version
+
+      # 6. Azure login using your service principal JSON in AZURE_CREDENTIALS
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # 7. Create or update the Azure Container Instance
       - name: Create or update ACI
-        uses: azure/cli@v2
+        uses: azure/CLI@v2
         with:
-          azcliversion: 2.65.0
           inlineScript: |
-            az group show -n ${{ env.RESOURCE_GROUP }}
+            set -e
+
+            RG_NAME=${{ env.RG_NAME }}
+            CONTAINER_NAME=${{ env.CONTAINER_NAME }}
+            LOCATION=${{ env.LOCATION }}
+            DNS_LABEL=${{ env.DNS_LABEL }}
+            IMAGE=${{ env.IMAGE_NAME }}
+
+            echo "Using image: $IMAGE"
+
+            # Delete existing container instance if it exists
+            if az container show --resource-group "$RG_NAME" --name "$CONTAINER_NAME" >/dev/null 2>&1; then
+              echo "Existing container instance found, deleting..."
+              az container delete --resource-group "$RG_NAME" --name "$CONTAINER_NAME" --yes
+            else
+              echo "No existing container instance, creating a new one..."
+            fi
 
             az container create \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --name ${{ env.CONTAINER_NAME }} \
-              --image ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest \
-              --location ${{ env.CONTAINER_REGION }} \
-              --dns-name-label cloudmart-1887764 \
+              --resource-group "$RG_NAME" \
+              --name "$CONTAINER_NAME" \
+              --image "$IMAGE" \
+              --location "$LOCATION" \
+              --dns-name-label "$DNS_LABEL" \
               --ports 80 \
               --restart-policy Always \
               --environment-variables \
                 COSMOS_ENDPOINT=${{ secrets.COSMOS_ENDPOINT }} \
                 COSMOS_KEY=${{ secrets.COSMOS_KEY }} \
-                COSMOS_DB_NAME=cloudmart \
-              --query "provisioningState" \
-              --output tsv || \
-            az container show \
-              --resource-group ${{ env.RESOURCE_GROUP }} \
-              --name ${{ env.CONTAINER_NAME }} \
-              --query "provisioningState" \
-              --output tsv
+                COSMOS_DB_NAME=cloudmart
+
