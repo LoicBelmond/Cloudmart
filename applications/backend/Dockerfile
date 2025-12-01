@@ -1,27 +1,35 @@
-# applications/backend/Dockerfile
-
-# 1. Base image
+# Lightweight Python image
 FROM python:3.11-slim
 
-# 2. Workdir inside the container
+# Work directory in the container
 WORKDIR /app
 
-# 3. Install system deps (optional but useful for SSL, etc.)
+# System deps (optional but helpful if you add more packages later)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
  && rm -rf /var/lib/apt/lists/*
 
-# 4. Copy requirements and install
+# -----------------------------
+# Python dependencies
+# -----------------------------
+# Place requirements.txt in applications/backend/requirements.txt
 COPY applications/backend/requirements.txt ./requirements.txt
-
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Copy application code
+# -----------------------------
+# Application code
+# -----------------------------
+# Backend (FastAPI) code
 COPY applications/backend/app ./app
 
-# 6. Environment & port
+# Frontend static files (index.html lives here)
+COPY applications/frontend ./frontend
+
+# -----------------------------
+# Runtime configuration
+# -----------------------------
 ENV PORT=80
 EXPOSE 80
 
-# 7. Start FastAPI with Uvicorn
+# Start FastAPI with Uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
