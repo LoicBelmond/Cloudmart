@@ -1,35 +1,53 @@
-from pathlib import Path
+from typing import List
+from pydantic import BaseModel
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+# ---------- Product model & in-memory data ----------
 
-# keep your existing imports:
-# from .database import get_cosmos_client
-# from .models import Product, ...
-
-app = FastAPI()
-
-# ========== Frontend paths ==========
-BASE_DIR = Path(__file__).resolve().parent.parent  # /app
-FRONTEND_DIR = BASE_DIR / "frontend"               # /app/frontend
-
-# Serve static assets if you have any (CSS/JS)
-app.mount(
-    "/static",
-    StaticFiles(directory=FRONTEND_DIR),
-    name="static",
-)
-
-@app.get("/", response_class=HTMLResponse)
-async def serve_home():
-    index_file = FRONTEND_DIR / "index.html"
-    # If index.html is missing, return a simple message instead of crashing
-    if not index_file.exists():
-        return HTMLResponse("<h1>CloudMart</h1><p>index.html not found in /frontend</p>")
-    return FileResponse(index_file)
+class Product(BaseModel):
+    id: str
+    name: str
+    category: str
+    price: float
+    description: str | None = None
+    image_url: str | None = None
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok", "message": "CloudMart backend is running on Azure"}
+# Temporary in-memory products (so the frontend always works)
+FAKE_PRODUCTS: List[Product] = [
+    Product(
+        id="1",
+        name="Wireless Headphones",
+        category="Electronics",
+        price=79.99,
+        description="Bluetooth over-ear headphones with noise isolation.",
+        image_url="https://via.placeholder.com/200x200?text=Headphones",
+    ),
+    Product(
+        id="2",
+        name="Gaming Mouse",
+        category="Electronics",
+        price=49.99,
+        description="RGB gaming mouse with 6 programmable buttons.",
+        image_url="https://via.placeholder.com/200x200?text=Mouse",
+    ),
+    Product(
+        id="3",
+        name="Water Bottle",
+        category="Home",
+        price=19.99,
+        description="Insulated stainless-steel bottle, 750 ml.",
+        image_url="https://via.placeholder.com/200x200?text=Bottle",
+    ),
+]
+
+
+@app.get("/api/v1/products", response_model=List[Product])
+async def list_products():
+    """
+    Return a list of products.
+
+    NOTE: right now this uses in-memory data (FAKE_PRODUCTS)
+    so the UI works even if Cosmos DB is empty or misconfigured.
+    Later you can replace this with a Cosmos DB query.
+    """
+    return FAKE_PRODUCTS
